@@ -82,6 +82,17 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
   <div class="sub">Test scritto (30 domande, max 3 errori) e riconoscimento foto (9 funghi, max 3 errori)</div>
 </header>
 <div class="disclaimer">⚠️ Le domande e i contenuti si basano sulla normativa vigente al momento in cui sono stati inseriti nel sito. La legge in materia di raccolta e commercio dei funghi può cambiare nel tempo: le informazioni potrebbero non essere aggiornate. Verifica sempre con fonti ufficiali e con un micologo autorizzato prima di raccogliere o consumare funghi.</div>
+
+<div class="card" id="siteGate" style="max-width:380px;margin:24px auto;">
+  <h2>Accesso</h2>
+  <p class="hint">Inserisci l'email e la password che ti sono state fornite per usare il sito.</p>
+  <label>Email</label><input type="text" id="siteEmail">
+  <label>Password</label><input type="password" id="sitePass">
+  <button class="btn" id="siteLoginBtn">Accedi</button>
+  <p class="count" id="siteLoginStatus"></p>
+</div>
+
+<div id="siteApp" style="display:none">
 <nav id="nav">
   <button data-v="home" class="active">Home</button>
   <button data-v="studio">Studio</button>
@@ -92,6 +103,7 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 
   <section id="home" class="view active">
     <div class="card">
+      <button class="btn secondary" id="siteLogoutBtn" style="float:right">Esci</button>
       <h2>Come funziona</h2>
       <p>Il database contiene le domande a risposta multipla (suddivise per tipo di fungo) e le schede fotografiche dei funghi da riconoscere, divise in <b>mortali</b>, <b>velenosi</b> e <b>commestibili</b>.</p>
       <p class="muted" id="homeStats">Caricamento dati...</p>
@@ -134,9 +146,11 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
   </section>
 
 </main>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyAJDmLtnUcntiOMXuwTMJUNMqflN88Eh-E",
@@ -149,6 +163,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const fireDb = firebase.firestore();
+const fireAuth = firebase.auth();
 
 // Adapter di sola lettura: il sito pubblico legge domande/funghi da Firestore
 // ma non scrive nulla (la scrittura avviene solo dal pannello admin separato).
@@ -177,6 +192,22 @@ document.querySelectorAll('#nav button').forEach(b=>{
     b.classList.add('active'); $(b.dataset.v).classList.add('active');
   });
 });
+
+let avviato = false;
+fireAuth.onAuthStateChanged(user=>{
+  $('siteGate').style.display = user ? 'none' : 'block';
+  $('siteApp').style.display = user ? 'block' : 'none';
+  if(user && !avviato){ avviato = true; init(); }
+});
+
+$('siteLoginBtn').addEventListener('click', async ()=>{
+  const email=$('siteEmail').value.trim(), pass=$('sitePass').value;
+  if(!email || !pass){ $('siteLoginStatus').textContent='Inserisci email e password.'; return; }
+  try{ await fireAuth.signInWithEmailAndPassword(email, pass); $('siteLoginStatus').textContent=''; }
+  catch(e){ $('siteLoginStatus').textContent='Accesso non riuscito: email o password errate.'; }
+});
+
+$('siteLogoutBtn').addEventListener('click', ()=> fireAuth.signOut());
 
 async function init(){
   try{
@@ -335,8 +366,6 @@ function startFoto(){
       <button class="btn secondary" onclick="location.reload()">Rifai il test</button>`;
   });
 }
-
-init();
 </script>
 </body>
 </html>

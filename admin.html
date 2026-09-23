@@ -62,7 +62,7 @@ button.btn.danger{background:transparent;color:var(--danger);border:1px solid va
     <h2>Accesso riservato</h2>
     <p class="hint">Accedi con l'email e la password già create su Firebase Authentication.</p>
     <label>Email</label><input type="text" id="authEmail">
-    <label>Password</label><input type="text" id="authPass">
+    <label>Password</label><input type="password" id="authPass">
     <button class="btn" id="loginBtn">Accedi</button>
     <p class="count" id="authStatus"></p>
   </div>
@@ -70,6 +70,16 @@ button.btn.danger{background:transparent;color:var(--danger);border:1px solid va
   <div id="adminContent" style="display:none">
     <div class="card">
       <button class="btn secondary" id="logoutBtn" style="float:right">Esci</button>
+      <h2>Crea account per il sito</h2>
+      <p class="hint">Crea un accesso (email + password) da dare a chi deve usare il sito principale, ora protetto da login. Questa operazione non ti disconnette dal pannello admin.</p>
+      <label>Email nuovo account</label>
+      <input type="text" id="newAccEmail">
+      <label>Password nuovo account (almeno 6 caratteri)</label>
+      <input type="password" id="newAccPass">
+      <button class="btn" id="createAccBtn">Crea account</button>
+      <p class="count" id="createAccStatus"></p>
+    </div>
+    <div class="card">
       <h2>Importa domande da CSV</h2>
       <p class="hint">Prima riga = intestazioni. Colonne richieste: <b>categoria, domanda, a, b, c, corretta</b> (corretta = A/B/C oppure 1/2/3). Usa la virgola come separatore; se un testo contiene virgole, racchiudilo tra virgolette.</p>
       <input type="file" id="csvFile" accept=".csv,text/csv">
@@ -176,6 +186,29 @@ $('loginBtn').addEventListener('click', async ()=>{
 });
 
 $('logoutBtn').addEventListener('click', ()=> fireAuth.signOut());
+
+$('createAccBtn').addEventListener('click', async ()=>{
+  const email=$('newAccEmail').value.trim(), pass=$('newAccPass').value;
+  if(!email || pass.length<6){ $('createAccStatus').textContent='Email valida e password di almeno 6 caratteri.'; return; }
+  $('createAccBtn').disabled = true;
+  // Uso una seconda istanza Firebase "usa e getta" così la creazione dell'account
+  // non disconnette la sessione admin corrente (limite del SDK client di Firebase:
+  // creare un utente esegue anche l'accesso automatico con quel nuovo utente).
+  let secondaryApp;
+  try{
+    secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary_'+Date.now());
+    const secondaryAuth = secondaryApp.auth();
+    await secondaryAuth.createUserWithEmailAndPassword(email, pass);
+    await secondaryAuth.signOut();
+    $('createAccStatus').textContent = `Account creato per ${email}.`;
+    $('newAccEmail').value=''; $('newAccPass').value='';
+  }catch(e){
+    $('createAccStatus').textContent = e.code==='auth/email-already-in-use' ? 'Questa email ha già un account.' : ('Errore: '+(e.message||e));
+  }finally{
+    if(secondaryApp) await secondaryApp.delete();
+    $('createAccBtn').disabled = false;
+  }
+});
 
 $('addQ').addEventListener('click', addDomanda);
 $('addF').addEventListener('click', addFunghiBulk);
