@@ -180,7 +180,7 @@ fireAuth.onAuthStateChanged(async user=>{
       autorizzato = doc.exists;
     }catch(e){ autorizzato=false; }
     if(!autorizzato){
-      $('authStatus').textContent = 'Questo account non è autorizzato ad accedere al pannello admin.';
+      $('authStatus').textContent = 'Non autorizzato. Il tuo UID è esattamente: ' + user.uid + ' — verifica che in Firestore, raccolta "admins", esista un documento con questo ID esatto (copialo da qui, non ricopiarlo a mano).';
       await fireAuth.signOut();
       return;
     }
