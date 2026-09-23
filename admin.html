@@ -118,12 +118,11 @@ button.btn.danger{background:transparent;color:var(--danger);border:1px solid va
 
 </main>
 
-<script type="module">
-import { initializeApp } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/app/+esm";
-import { getFirestore, collection as fsCollection, doc as fsDoc, addDoc, getDocs, deleteDoc, onSnapshot } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firestore/+esm";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/storage/+esm";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/auth/+esm";
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-storage-compat.min.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyAJDmLtnUcntiOMXuwTMJUNMqflN88Eh-E",
   authDomain: "quiz-funghi.firebaseapp.com",
@@ -133,33 +132,32 @@ const firebaseConfig = {
   appId: "1:1069223593225:web:2bf3595e9e53f3bc1a7fd8"
 };
 
-const fbApp = initializeApp(firebaseConfig);
-const fireDb = getFirestore(fbApp);
-const fireStorage = getStorage(fbApp);
-const fireAuth = getAuth(fbApp);
+firebase.initializeApp(firebaseConfig);
+const fireDb = firebase.firestore();
+const fireStorage = firebase.storage();
+const fireAuth = firebase.auth();
 
 const db = {
   collection(name){
-    const colRef = fsCollection(fireDb, name);
+    const colRef = fireDb.collection(name);
     return {
-      async add(data){ const d = await addDoc(colRef, data); return {id:d.id}; },
-      async get(){ const snap = await getDocs(colRef); return {docs: snap.docs.map(d=>({id:d.id, data:d.data()}))}; },
+      async add(data){ const d = await colRef.add(data); return {id:d.id}; },
+      async get(){ const snap = await colRef.get(); return {docs: snap.docs.map(d=>({id:d.id, data:d.data()}))}; },
       onSnapshot(cb, errcb){
-        return onSnapshot(colRef, s=>cb({docs: s.docs.map(d=>({id:d.id, data:d.data()}))}), errcb);
+        return colRef.onSnapshot(s=>cb({docs: s.docs.map(d=>({id:d.id, data:d.data()}))}), errcb);
       }
     };
   },
   doc(path){
-    const [colName, id] = path.split('/');
-    const ref = fsDoc(fireDb, colName, id);
-    return { async delete(){ await deleteDoc(ref); } };
+    const ref = fireDb.doc(path);
+    return { async delete(){ await ref.delete(); } };
   }
 };
 const assets = {
   async upload(file){
-    const r = storageRef(fireStorage, 'funghi/' + Date.now() + '_' + file.name);
-    await uploadBytes(r, file);
-    const url = await getDownloadURL(r);
+    const r = fireStorage.ref('funghi/' + Date.now() + '_' + file.name);
+    await r.put(file);
+    const url = await r.getDownloadURL();
     return { url };
   }
 };
@@ -167,7 +165,7 @@ const assets = {
 let domande=[], funghi=[];
 function $(id){return document.getElementById(id);}
 
-onAuthStateChanged(fireAuth, user=>{
+fireAuth.onAuthStateChanged(user=>{
   $('adminGate').style.display = user ? 'none' : 'block';
   $('adminContent').style.display = user ? 'block' : 'none';
   if(user){ loadAll(); subscribe(); }
@@ -176,18 +174,18 @@ onAuthStateChanged(fireAuth, user=>{
 $('loginBtn').addEventListener('click', async ()=>{
   const email=$('authEmail').value.trim(), pass=$('authPass').value;
   if(!email || !pass){ $('authStatus').textContent='Inserisci email e password.'; return; }
-  try{ await signInWithEmailAndPassword(fireAuth, email, pass); $('authStatus').textContent=''; }
+  try{ await fireAuth.signInWithEmailAndPassword(email, pass); $('authStatus').textContent=''; }
   catch(e){ $('authStatus').textContent='Accesso non riuscito: email o password errate.'; }
 });
 
 $('setupBtn').addEventListener('click', async ()=>{
   const email=$('authEmail').value.trim(), pass=$('authPass').value;
   if(!email || pass.length<6){ $('authStatus').textContent='Email valida e password di almeno 6 caratteri.'; return; }
-  try{ await createUserWithEmailAndPassword(fireAuth, email, pass); $('authStatus').textContent=''; }
+  try{ await fireAuth.createUserWithEmailAndPassword(email, pass); $('authStatus').textContent=''; }
   catch(e){ $('authStatus').textContent = e.code==='auth/email-already-in-use' ? 'Email già registrata: usa "Accedi".' : 'Errore nella creazione dell\'accesso.'; }
 });
 
-$('logoutBtn').addEventListener('click', ()=> signOut(fireAuth));
+$('logoutBtn').addEventListener('click', ()=> fireAuth.signOut());
 
 $('addQ').addEventListener('click', addDomanda);
 $('addF').addEventListener('click', addFunghiBulk);

@@ -135,10 +135,9 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 
 </main>
 
-<script type="module">
-import { initializeApp } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/app/+esm";
-import { getFirestore, collection as fsCollection, getDocs, onSnapshot } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firestore/+esm";
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
+<script>
 const firebaseConfig = {
   apiKey: "AIzaSyAJDmLtnUcntiOMXuwTMJUNMqflN88Eh-E",
   authDomain: "quiz-funghi.firebaseapp.com",
@@ -148,18 +147,18 @@ const firebaseConfig = {
   appId: "1:1069223593225:web:2bf3595e9e53f3bc1a7fd8"
 };
 
-const fbApp = initializeApp(firebaseConfig);
-const fireDb = getFirestore(fbApp);
+firebase.initializeApp(firebaseConfig);
+const fireDb = firebase.firestore();
 
 // Adapter di sola lettura: il sito pubblico legge domande/funghi da Firestore
 // ma non scrive nulla (la scrittura avviene solo dal pannello admin separato).
 const db = {
   collection(name){
-    const colRef = fsCollection(fireDb, name);
+    const colRef = fireDb.collection(name);
     return {
-      async get(){ const snap = await getDocs(colRef); return {docs: snap.docs.map(d=>({id:d.id, data:d.data()}))}; },
+      async get(){ const snap = await colRef.get(); return {docs: snap.docs.map(d=>({id:d.id, data:d.data()}))}; },
       onSnapshot(cb, errcb){
-        return onSnapshot(colRef, s=>cb({docs: s.docs.map(d=>({id:d.id, data:d.data()}))}), errcb);
+        return colRef.onSnapshot(s=>cb({docs: s.docs.map(d=>({id:d.id, data:d.data()}))}), errcb);
       }
     };
   }
