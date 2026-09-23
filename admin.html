@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestione contenuti - Esame Funghi</title>
+<style>
+:root{
+  --bg:#faf8f4; --card:#fff; --text:#2b2418; --muted:#7a7160; --border:#e4dcc9;
+  --accent:#6b7a3f; --accent-dark:#4d5a2a; --danger:#a44; --warn:#b8860b; --ok:#2e7d32;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1c1a16; --card:#252219; --text:#eee7d8; --muted:#a39a86; --border:#3a352a;
+    --accent:#9db06a; --accent-dark:#c3d68f; --warn:#e0b84f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1c1a16; --card:#252219; --text:#eee7d8; --muted:#a39a86; --border:#3a352a;
+  --accent:#9db06a; --accent-dark:#c3d68f; --warn:#e0b84f;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Georgia,'Times New Roman',serif;line-height:1.5;}
+header{padding:20px 16px 12px;border-bottom:1px solid var(--border);}
+h1{margin:0 0 4px;font-size:1.4rem;color:var(--accent-dark);}
+.sub{color:var(--muted);font-size:.9rem;}
+main{max-width:760px;margin:0 auto;padding:16px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;}
+h2{margin-top:0;color:var(--accent-dark);font-size:1.1rem;}
+label{display:block;margin:10px 0 4px;font-size:.85rem;color:var(--muted);}
+input[type=text],select,textarea{
+  width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-family:inherit;font-size:.95rem;
+}
+input[type=file]{width:100%;}
+button.btn{background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:6px;font-family:inherit;font-size:.9rem;cursor:pointer;margin-top:10px;}
+button.btn.secondary{background:transparent;color:var(--accent-dark);border:1px solid var(--accent);}
+button.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger);padding:4px 10px;font-size:.8rem;}
+.row{display:flex;gap:10px;flex-wrap:wrap;}
+.row>*{flex:1;min-width:140px;}
+.list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.9rem;}
+.list-item img{width:44px;height:44px;object-fit:cover;border-radius:6px;}
+.tag{display:inline-block;padding:2px 8px;border-radius:12px;font-size:.72rem;color:#fff;}
+.tag.mortale{background:var(--danger);}
+.tag.velenoso{background:var(--warn);}
+.tag.commestibile{background:var(--ok);}
+.muted{color:var(--muted);font-size:.85rem;}
+.count{font-size:.8rem;color:var(--muted);}
+.hint{font-size:.8rem;color:var(--muted);margin-top:-4px;margin-bottom:6px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🍄 Gestione contenuti — Esame Funghi</h1>
+  <div class="sub">Pannello riservato: import domande, caricamento foto in blocco</div>
+</header>
+<main>
+
+  <div class="card" id="adminGate">
+    <h2>Accesso riservato</h2>
+    <p class="hint">Login protetto da Firebase Authentication. Se è la prima volta, usa "Crea accesso" per registrare la tua email e password; le volte successive usa "Accedi".</p>
+    <label>Email</label><input type="text" id="authEmail">
+    <label>Password (almeno 6 caratteri)</label><input type="text" id="authPass">
+    <div class="row">
+      <button class="btn" id="loginBtn">Accedi</button>
+      <button class="btn secondary" id="setupBtn">Crea accesso</button>
+    </div>
+    <p class="count" id="authStatus"></p>
+  </div>
+
+  <div id="adminContent" style="display:none">
+    <div class="card">
+      <button class="btn secondary" id="logoutBtn" style="float:right">Esci</button>
+      <h2>Importa domande da CSV</h2>
+      <p class="hint">Prima riga = intestazioni. Colonne richieste: <b>categoria, domanda, a, b, c, corretta</b> (corretta = A/B/C oppure 1/2/3). Usa la virgola come separatore; se un testo contiene virgole, racchiudilo tra virgolette.</p>
+      <input type="file" id="csvFile" accept=".csv,text/csv">
+      <button class="btn secondary" id="importCsv">Importa CSV</button>
+      <p class="count" id="csvStatus"></p>
+    </div>
+    <div class="card">
+      <h2>Aggiungi domanda singola</h2>
+      <label>Categoria / tipo di fungo</label>
+      <input type="text" id="qCat" placeholder="es. Amanita, Boletus, generale...">
+      <label>Testo della domanda</label>
+      <textarea id="qTesto" rows="2"></textarea>
+      <div class="row">
+        <div><label>Risposta A</label><input type="text" id="qA"></div>
+        <div><label>Risposta B</label><input type="text" id="qB"></div>
+        <div><label>Risposta C</label><input type="text" id="qC"></div>
+      </div>
+      <label>Risposta corretta</label>
+      <select id="qCorretta"><option value="0">A</option><option value="1">B</option><option value="2">C</option></select>
+      <button class="btn" id="addQ">Aggiungi domanda</button>
+      <p class="count" id="qCount"></p>
+    </div>
+    <div class="card">
+      <h2>Domande inserite</h2>
+      <div id="qList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Carica foto funghi (in blocco)</h2>
+      <p class="hint">Seleziona la categoria, poi tutte le foto di quella categoria insieme: il nome di ogni fungo viene preso automaticamente dal nome del file (es. "amanita_phalloides.jpg" → "Amanita phalloides"). Ripeti per le altre categorie.</p>
+      <label>Categoria di questo gruppo di foto</label>
+      <select id="fCat"><option value="mortale">Mortale</option><option value="velenoso">Velenoso</option><option value="commestibile">Commestibile</option></select>
+      <label>Foto (puoi selezionarne più di una)</label>
+      <input type="file" id="fFiles" accept="image/*" multiple>
+      <button class="btn" id="addF">Carica foto selezionate</button>
+      <p class="count" id="fCount"></p>
+    </div>
+    <div class="card">
+      <h2>Funghi inseriti</h2>
+      <div id="fList"></div>
+    </div>
+  </div>
+
+</main>
+
+<script type="module">
+import { initializeApp } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/app/+esm";
+import { getFirestore, collection as fsCollection, doc as fsDoc, addDoc, getDocs, deleteDoc, onSnapshot } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/firestore/+esm";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/storage/+esm";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://cdn.jsdelivr.net/npm/firebase@10.14.1/auth/+esm";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAJDmLtnUcntiOMXuwTMJUNMqflN88Eh-E",
+  authDomain: "quiz-funghi.firebaseapp.com",
+  projectId: "quiz-funghi",
+  storageBucket: "quiz-funghi.firebasestorage.app",
+  messagingSenderId: "1069223593225",
+  appId: "1:1069223593225:web:2bf3595e9e53f3bc1a7fd8"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const fireDb = getFirestore(fbApp);
+const fireStorage = getStorage(fbApp);
+const fireAuth = getAuth(fbApp);
+
+const db = {
+  collection(name){
+    const colRef = fsCollection(fireDb, name);
+    return {
+      async add(data){ const d = await addDoc(colRef, data); return {id:d.id}; },
+      async get(){ const snap = await getDocs(colRef); return {docs: snap.docs.map(d=>({id:d.id, data:d.data()}))}; },
+      onSnapshot(cb, errcb){
+        return onSnapshot(colRef, s=>cb({docs: s.docs.map(d=>({id:d.id, data:d.data()}))}), errcb);
+      }
+    };
+  },
+  doc(path){
+    const [colName, id] = path.split('/');
+    const ref = fsDoc(fireDb, colName, id);
+    return { async delete(){ await deleteDoc(ref); } };
+  }
+};
+const assets = {
+  async upload(file){
+    const r = storageRef(fireStorage, 'funghi/' + Date.now() + '_' + file.name);
+    await uploadBytes(r, file);
+    const url = await getDownloadURL(r);
+    return { url };
+  }
+};
+
+let domande=[], funghi=[];
+function $(id){return document.getElementById(id);}
+
+onAuthStateChanged(fireAuth, user=>{
+  $('adminGate').style.display = user ? 'none' : 'block';
+  $('adminContent').style.display = user ? 'block' : 'none';
+  if(user){ loadAll(); subscribe(); }
+});
+
+$('loginBtn').addEventListener('click', async ()=>{
+  const email=$('authEmail').value.trim(), pass=$('authPass').value;
+  if(!email || !pass){ $('authStatus').textContent='Inserisci email e password.'; return; }
+  try{ await signInWithEmailAndPassword(fireAuth, email, pass); $('authStatus').textContent=''; }
+  catch(e){ $('authStatus').textContent='Accesso non riuscito: email o password errate.'; }
+});
+
+$('setupBtn').addEventListener('click', async ()=>{
+  const email=$('authEmail').value.trim(), pass=$('authPass').value;
+  if(!email || pass.length<6){ $('authStatus').textContent='Email valida e password di almeno 6 caratteri.'; return; }
+  try{ await createUserWithEmailAndPassword(fireAuth, email, pass); $('authStatus').textContent=''; }
+  catch(e){ $('authStatus').textContent = e.code==='auth/email-already-in-use' ? 'Email già registrata: usa "Accedi".' : 'Errore nella creazione dell\'accesso.'; }
+});
+
+$('logoutBtn').addEventListener('click', ()=> signOut(fireAuth));
+
+$('addQ').addEventListener('click', addDomanda);
+$('addF').addEventListener('click', addFunghiBulk);
+$('importCsv').addEventListener('click', importCsv);
+
+function subscribe(){
+  db.collection('domande').onSnapshot(snap=>{
+    domande = snap.docs.map(d=>({id:d.id,...d.data}));
+    renderQList(); updateStats();
+  }, ()=>{});
+  db.collection('funghi').onSnapshot(snap=>{
+    funghi = snap.docs.map(d=>({id:d.id,...d.data}));
+    renderFList(); updateStats();
+  }, ()=>{});
+}
+
+async function loadAll(){
+  const qs = await db.collection('domande').get();
+  domande = qs.docs.map(d=>({id:d.id,...d.data}));
+  const fs = await db.collection('funghi').get();
+  funghi = fs.docs.map(d=>({id:d.id,...d.data}));
+  renderQList(); renderFList(); updateStats();
+}
+
+function updateStats(){
+  $('qCount').textContent = domande.length+' domande totali';
+  $('fCount').textContent = funghi.length+' funghi totali';
+}
+
+async function addDomanda(){
+  const testo=$('qTesto').value.trim();
+  const opzioni=[$('qA').value.trim(),$('qB').value.trim(),$('qC').value.trim()];
+  if(!testo || opzioni.some(o=>!o)){ alert('Compila domanda e tutte e 3 le risposte.'); return; }
+  await db.collection('domande').add({
+    testo, categoria: $('qCat').value.trim()||'generale',
+    opzioni, corretta: parseInt($('qCorretta').value,10)
+  });
+  $('qTesto').value=''; $('qA').value=''; $('qB').value=''; $('qC').value='';
+}
+
+function renderQList(){
+  if(!domande.length){ $('qList').innerHTML='<p class="muted">Nessuna domanda inserita.</p>'; return; }
+  $('qList').innerHTML = domande.map(q=>`<div class="list-item">
+    <span>${q.testo} <span class="muted">(${q.categoria})</span></span>
+    <button class="btn danger" onclick="delDomanda('${q.id}')">elimina</button></div>`).join('');
+}
+window.delDomanda = async id => { await db.doc('domande/'+id).delete(); };
+
+function nomeDaFile(filename){
+  const base = filename.replace(/\.[^/.]+$/, '');
+  const s = base.replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  return s.replace(/\w\S*/g, t => t.charAt(0).toUpperCase()+t.slice(1).toLowerCase());
+}
+
+async function addFunghiBulk(){
+  const files = Array.from($('fFiles').files);
+  if(!files.length){ alert('Seleziona almeno una foto.'); return; }
+  const categoria = $('fCat').value;
+  $('addF').disabled = true;
+  let ok=0, err=0;
+  for(let i=0;i<files.length;i++){
+    $('fCount').textContent = `Caricamento ${i+1}/${files.length}...`;
+    try{
+      const up = await assets.upload(files[i]);
+      await db.collection('funghi').add({ nome: nomeDaFile(files[i].name), categoria, foto: up.url, note:'' });
+      ok++;
+    }catch(e){ err++; }
+  }
+  $('fCount').textContent = `Fatto: ${ok} foto caricate${err?`, ${err} errori`:''}.`;
+  $('fFiles').value='';
+  $('addF').disabled = false;
+}
+
+function renderFList(){
+  if(!funghi.length){ $('fList').innerHTML='<p class="muted">Nessun fungo inserito.</p>'; return; }
+  $('fList').innerHTML = funghi.map(f=>`<div class="list-item">
+    <img src="${f.foto}" alt="${f.nome}">
+    <span style="flex:1">${f.nome} <span class="tag ${f.categoria}">${f.categoria}</span></span>
+    <button class="btn danger" onclick="delFungo('${f.id}')">elimina</button></div>`).join('');
+}
+window.delFungo = async id => { await db.doc('funghi/'+id).delete(); };
+
+// ---- CSV domande ----
+function parseCSVLine(line){
+  const out=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(inQ){
+      if(c==='"'){ if(line[i+1]==='"'){cur+='"'; i++;} else inQ=false; }
+      else cur+=c;
+    } else {
+      if(c==='"') inQ=true;
+      else if(c===','){ out.push(cur); cur=''; }
+      else cur+=c;
+    }
+  }
+  out.push(cur);
+  return out.map(s=>s.trim());
+}
+function parseCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
+  if(!lines.length) return [];
+  const headers = parseCSVLine(lines[0]).map(h=>h.toLowerCase());
+  const idx = name => headers.findIndex(h=>h===name);
+  const iCat=idx('categoria'), iDom = idx('domanda')>=0?idx('domanda'):idx('testo'),
+        iA=idx('a'), iB=idx('b'), iC=idx('c'), iCorr=idx('corretta');
+  const rows=[];
+  for(let i=1;i<lines.length;i++){
+    const f = parseCSVLine(lines[i]);
+    if(f.length<2) continue;
+    let corr = (f[iCorr]||'').trim().toUpperCase();
+    let corrIdx = {A:0,B:1,C:2,'1':0,'2':1,'3':2}[corr];
+    if(corrIdx===undefined) continue;
+    rows.push({
+      categoria: f[iCat]||'generale',
+      testo: f[iDom]||'',
+      opzioni: [f[iA]||'', f[iB]||'', f[iC]||''],
+      corretta: corrIdx
+    });
+  }
+  return rows.filter(r=>r.testo && r.opzioni.every(o=>o));
+}
+async function importCsv(){
+  const file = $('csvFile').files[0];
+  if(!file){ alert('Seleziona un file CSV.'); return; }
+  const text = await file.text();
+  const rows = parseCSV(text);
+  if(!rows.length){ $('csvStatus').textContent='Nessuna riga valida trovata nel CSV.'; return; }
+  $('importCsv').disabled = true;
+  let ok=0;
+  for(const r of rows){
+    $('csvStatus').textContent = `Importazione ${ok+1}/${rows.length}...`;
+    await db.collection('domande').add(r);
+    ok++;
+  }
+  $('csvStatus').textContent = `Importate ${ok} domande.`;
+  $('csvFile').value='';
+  $('importCsv').disabled = false;
+}
+</script>
+</body>
+</html>
