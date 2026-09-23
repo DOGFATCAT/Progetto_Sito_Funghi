@@ -172,7 +172,19 @@ const assets = {
 let domande=[], funghi=[];
 function $(id){return document.getElementById(id);}
 
-fireAuth.onAuthStateChanged(user=>{
+fireAuth.onAuthStateChanged(async user=>{
+  if(user){
+    let autorizzato=false;
+    try{
+      const doc = await fireDb.collection('admins').doc(user.uid).get();
+      autorizzato = doc.exists;
+    }catch(e){ autorizzato=false; }
+    if(!autorizzato){
+      $('authStatus').textContent = 'Questo account non è autorizzato ad accedere al pannello admin.';
+      await fireAuth.signOut();
+      return;
+    }
+  }
   $('adminGate').style.display = user ? 'none' : 'block';
   $('adminContent').style.display = user ? 'block' : 'none';
   if(user){ loadAll(); subscribe(); }
