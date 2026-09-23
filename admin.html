@@ -60,13 +60,10 @@ button.btn.danger{background:transparent;color:var(--danger);border:1px solid va
 
   <div class="card" id="adminGate">
     <h2>Accesso riservato</h2>
-    <p class="hint">Login protetto da Firebase Authentication. Se è la prima volta, usa "Crea accesso" per registrare la tua email e password; le volte successive usa "Accedi".</p>
+    <p class="hint">Accedi con l'email e la password già create su Firebase Authentication.</p>
     <label>Email</label><input type="text" id="authEmail">
-    <label>Password (almeno 6 caratteri)</label><input type="text" id="authPass">
-    <div class="row">
-      <button class="btn" id="loginBtn">Accedi</button>
-      <button class="btn secondary" id="setupBtn">Crea accesso</button>
-    </div>
+    <label>Password</label><input type="text" id="authPass">
+    <button class="btn" id="loginBtn">Accedi</button>
     <p class="count" id="authStatus"></p>
   </div>
 
@@ -176,13 +173,6 @@ $('loginBtn').addEventListener('click', async ()=>{
   if(!email || !pass){ $('authStatus').textContent='Inserisci email e password.'; return; }
   try{ await fireAuth.signInWithEmailAndPassword(email, pass); $('authStatus').textContent=''; }
   catch(e){ $('authStatus').textContent='Accesso non riuscito: email o password errate.'; }
-});
-
-$('setupBtn').addEventListener('click', async ()=>{
-  const email=$('authEmail').value.trim(), pass=$('authPass').value;
-  if(!email || pass.length<6){ $('authStatus').textContent='Email valida e password di almeno 6 caratteri.'; return; }
-  try{ await fireAuth.createUserWithEmailAndPassword(email, pass); $('authStatus').textContent=''; }
-  catch(e){ $('authStatus').textContent = e.code==='auth/email-already-in-use' ? 'Email già registrata: usa "Accedi".' : 'Errore nella creazione dell\'accesso.'; }
 });
 
 $('logoutBtn').addEventListener('click', ()=> fireAuth.signOut());
