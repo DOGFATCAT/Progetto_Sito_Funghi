@@ -195,9 +195,14 @@ document.querySelectorAll('#nav button').forEach(b=>{
 
 let avviato = false;
 fireAuth.onAuthStateChanged(user=>{
+  console.log('[debug] onAuthStateChanged, user =', user ? user.uid : null);
   $('siteGate').style.display = user ? 'none' : 'block';
   $('siteApp').style.display = user ? 'block' : 'none';
   if(user && !avviato){ avviato = true; init(); }
+  if(!user && avviato){ $('siteLoginStatus').textContent = 'Sessione terminata (debug: onAuthStateChanged ha ricevuto user=null dopo l\'accesso).'; }
+}, err=>{
+  console.log('[debug] onAuthStateChanged error:', err);
+  $('siteLoginStatus').textContent = 'Errore di autenticazione: ' + (err.code||'') + ' ' + (err.message||err);
 });
 
 $('siteLoginBtn').addEventListener('click', async ()=>{

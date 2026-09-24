@@ -194,7 +194,7 @@ $('loginBtn').addEventListener('click', async ()=>{
   const email=$('authEmail').value.trim(), pass=$('authPass').value;
   if(!email || !pass){ $('authStatus').textContent='Inserisci email e password.'; return; }
   try{ await fireAuth.signInWithEmailAndPassword(email, pass); $('authStatus').textContent=''; }
-  catch(e){ $('authStatus').textContent='Accesso non riuscito: email o password errate.'; }
+  catch(e){ $('authStatus').textContent='Accesso non riuscito: '+(e.code||'')+' '+(e.message||e); }
 });
 
 $('logoutBtn').addEventListener('click', ()=> fireAuth.signOut());
