@@ -85,8 +85,8 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 
 <div class="card" id="siteGate" style="max-width:380px;margin:24px auto;">
   <h2>Accesso</h2>
-  <p class="hint">Inserisci l'email e la password che ti sono state fornite per usare il sito.</p>
-  <label>Email</label><input type="text" id="siteEmail">
+  <p class="hint">Inserisci il nome utente e la password che ti sono stati forniti per usare il sito.</p>
+  <label>Nome utente</label><input type="text" id="siteEmail">
   <label>Password</label><input type="password" id="sitePass">
   <button class="btn" id="siteLoginBtn">Accedi</button>
   <p class="count" id="siteLoginStatus"></p>
@@ -205,10 +205,15 @@ fireAuth.onAuthStateChanged(user=>{
   $('siteLoginStatus').textContent = 'Errore di autenticazione: ' + (err.code||'') + ' ' + (err.message||err);
 });
 
+function usernameToEmail(u){
+  const clean = u.trim().toLowerCase().replace(/[^a-z0-9._-]/g,'');
+  return clean + '@utenti.quiz-funghi.local';
+}
+
 $('siteLoginBtn').addEventListener('click', async ()=>{
-  const email=$('siteEmail').value.trim(), pass=$('sitePass').value;
-  if(!email || !pass){ $('siteLoginStatus').textContent='Inserisci email e password.'; return; }
-  try{ await fireAuth.signInWithEmailAndPassword(email, pass); $('siteLoginStatus').textContent=''; }
+  const username=$('siteEmail').value.trim(), pass=$('sitePass').value;
+  if(!username || !pass){ $('siteLoginStatus').textContent='Inserisci nome utente e password.'; return; }
+  try{ await fireAuth.signInWithEmailAndPassword(usernameToEmail(username), pass); $('siteLoginStatus').textContent=''; }
   catch(e){ $('siteLoginStatus').textContent='Accesso non riuscito: email o password errate.'; }
 });
 

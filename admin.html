@@ -71,9 +71,9 @@ button.btn.danger{background:transparent;color:var(--danger);border:1px solid va
     <div class="card">
       <button class="btn secondary" id="logoutBtn" style="float:right">Esci</button>
       <h2>Crea account per il sito</h2>
-      <p class="hint">Crea un accesso (email + password) da dare a chi deve usare il sito principale, ora protetto da login. Questa operazione non ti disconnette dal pannello admin.</p>
-      <label>Email nuovo account</label>
-      <input type="text" id="newAccEmail">
+      <p class="hint">Crea un accesso (nome utente + password) da dare a chi deve usare il sito principale, ora protetto da login. Questa operazione non ti disconnette dal pannello admin.</p>
+      <label>Nome utente nuovo account</label>
+      <input type="text" id="newAccUser">
       <label>Password nuovo account (almeno 6 caratteri)</label>
       <input type="password" id="newAccPass">
       <button class="btn" id="createAccBtn">Crea account</button>
@@ -199,9 +199,15 @@ $('loginBtn').addEventListener('click', async ()=>{
 
 $('logoutBtn').addEventListener('click', ()=> fireAuth.signOut());
 
+function usernameToEmail(u){
+  const clean = u.trim().toLowerCase().replace(/[^a-z0-9._-]/g,'');
+  return clean + '@utenti.quiz-funghi.local';
+}
+
 $('createAccBtn').addEventListener('click', async ()=>{
-  const email=$('newAccEmail').value.trim(), pass=$('newAccPass').value;
-  if(!email || pass.length<6){ $('createAccStatus').textContent='Email valida e password di almeno 6 caratteri.'; return; }
+  const username=$('newAccUser').value.trim(), pass=$('newAccPass').value;
+  if(!username || pass.length<6){ $('createAccStatus').textContent='Nome utente e password di almeno 6 caratteri.'; return; }
+  const email = usernameToEmail(username);
   $('createAccBtn').disabled = true;
   // Uso una seconda istanza Firebase "usa e getta" così la creazione dell'account
   // non disconnette la sessione admin corrente (limite del SDK client di Firebase:
@@ -212,10 +218,10 @@ $('createAccBtn').addEventListener('click', async ()=>{
     const secondaryAuth = secondaryApp.auth();
     await secondaryAuth.createUserWithEmailAndPassword(email, pass);
     await secondaryAuth.signOut();
-    $('createAccStatus').textContent = `Account creato per ${email}.`;
-    $('newAccEmail').value=''; $('newAccPass').value='';
+    $('createAccStatus').textContent = `Account creato per l'utente "${username}".`;
+    $('newAccUser').value=''; $('newAccPass').value='';
   }catch(e){
-    $('createAccStatus').textContent = e.code==='auth/email-already-in-use' ? 'Questa email ha già un account.' : ('Errore: '+(e.message||e));
+    $('createAccStatus').textContent = e.code==='auth/email-already-in-use' ? 'Questo nome utente ha già un account.' : ('Errore: '+(e.message||e));
   }finally{
     if(secondaryApp) await secondaryApp.delete();
     $('createAccBtn').disabled = false;
