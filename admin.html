@@ -119,6 +119,7 @@ button.btn.danger{background:transparent;color:var(--danger);border:1px solid va
     </div>
     <div class="card">
       <h2>Funghi inseriti</h2>
+      <input type="text" id="fSearch" placeholder="Cerca per nome o categoria...">
       <div id="fList"></div>
     </div>
   </div>
@@ -314,12 +315,18 @@ async function addFunghiBulk(){
 
 function renderFList(){
   if(!funghi.length){ $('fList').innerHTML='<p class="muted">Nessun fungo inserito.</p>'; return; }
-  $('fList').innerHTML = funghi.map(f=>`<div class="list-item">
+  const q = ($('fSearch').value||'').trim().toLowerCase();
+  const filtrati = q ? funghi.filter(f=>
+    f.nome.toLowerCase().includes(q) || f.categoria.toLowerCase().includes(q)
+  ) : funghi;
+  if(!filtrati.length){ $('fList').innerHTML='<p class="muted">Nessun fungo trovato per questa ricerca.</p>'; return; }
+  $('fList').innerHTML = filtrati.map(f=>`<div class="list-item">
     <img src="${f.foto}" alt="${f.nome}">
     <span style="flex:1">${f.nome} <span class="tag ${f.categoria}">${f.categoria}</span></span>
     <button class="btn danger" onclick="delFungo('${f.id}')">elimina</button></div>`).join('');
 }
 window.delFungo = async id => { await db.doc('funghi/'+id).delete(); };
+$('fSearch').addEventListener('input', renderFList);
 
 // ---- CSV domande ----
 function parseCSVLine(line){
