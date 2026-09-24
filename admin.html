@@ -158,9 +158,6 @@ const db = {
     return { async delete(){ await ref.delete(); } };
   }
 };
-let assets = null;
-(async ()=>{ try{ assets = await claude.use('assets'); }catch(e){ assets=null; } })();
-
 let domande=[], funghi=[];
 function $(id){return document.getElementById(id);}
 
@@ -273,8 +270,29 @@ function nomeDaFile(filename){
   return s.replace(/\w\S*/g, t => t.charAt(0).toUpperCase()+t.slice(1).toLowerCase());
 }
 
+function ridimensionaEComprimi(file, maxLato=900, qualita=0.72){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = ()=>{
+      img.onerror = reject;
+      img.onload = ()=>{
+        let {width, height} = img;
+        if(width > height && width > maxLato){ height = Math.round(height * maxLato/width); width = maxLato; }
+        else if(height > maxLato){ width = Math.round(width * maxLato/height); height = maxLato; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', qualita));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function addFunghiBulk(){
-  if(!assets){ alert('Lo spazio per le foto non è ancora pronto, riprova tra un secondo o ricarica la pagina.'); return; }
   const files = Array.from($('fFiles').files);
   if(!files.length){ alert('Seleziona almeno una foto.'); return; }
   const categoria = $('fCat').value;
@@ -283,12 +301,13 @@ async function addFunghiBulk(){
   for(let i=0;i<files.length;i++){
     $('fCount').textContent = `Caricamento ${i+1}/${files.length}...`;
     try{
-      const up = await assets.upload(files[i]);
-      await db.collection('funghi').add({ nome: nomeDaFile(files[i].name), categoria, foto: up.url, note:'' });
+      const dataUrl = await ridimensionaEComprimi(files[i]);
+      if(dataUrl.length > 900000){ err++; continue; } // troppo grande per un documento Firestore (limite 1MB)
+      await db.collection('funghi').add({ nome: nomeDaFile(files[i].name), categoria, foto: dataUrl, note:'' });
       ok++;
     }catch(e){ err++; }
   }
-  $('fCount').textContent = `Fatto: ${ok} foto caricate${err?`, ${err} errori`:''}.`;
+  $('fCount').textContent = `Fatto: ${ok} foto caricate${err?`, ${err} errori/troppo grandi`:''}.`;
   $('fFiles').value='';
   $('addF').disabled = false;
 }
