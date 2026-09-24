@@ -128,7 +128,6 @@ button.btn.danger{background:transparent;color:var(--danger);border:1px solid va
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-firestore-compat.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-auth-compat.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-storage-compat.min.js"></script>
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyAJDmLtnUcntiOMXuwTMJUNMqflN88Eh-E",
@@ -141,7 +140,6 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const fireDb = firebase.firestore();
-const fireStorage = firebase.storage();
 const fireAuth = firebase.auth();
 
 const db = {
@@ -160,14 +158,8 @@ const db = {
     return { async delete(){ await ref.delete(); } };
   }
 };
-const assets = {
-  async upload(file){
-    const r = fireStorage.ref('funghi/' + Date.now() + '_' + file.name);
-    await r.put(file);
-    const url = await r.getDownloadURL();
-    return { url };
-  }
-};
+let assets = null;
+(async ()=>{ try{ assets = await claude.use('assets'); }catch(e){ assets=null; } })();
 
 let domande=[], funghi=[];
 function $(id){return document.getElementById(id);}
@@ -282,6 +274,7 @@ function nomeDaFile(filename){
 }
 
 async function addFunghiBulk(){
+  if(!assets){ alert('Lo spazio per le foto non è ancora pronto, riprova tra un secondo o ricarica la pagina.'); return; }
   const files = Array.from($('fFiles').files);
   if(!files.length){ alert('Seleziona almeno una foto.'); return; }
   const categoria = $('fCat').value;
