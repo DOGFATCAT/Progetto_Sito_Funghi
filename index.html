@@ -273,14 +273,18 @@ function renderStudio(){
     </ul></div>`).join('')}
   </details>`).join('') : '<p class="muted">Nessuna domanda inserita.</p>';
 
-  const fcats=['mortale','velenoso','commestibile'];
-  $('studioFunghi').innerHTML = fcats.map(c=>{
-    const list = funghi.filter(f=>f.categoria===c);
-    if(!list.length) return '';
-    return `<details open><summary>${c} (${list.length})</summary><div class="grid">
-      ${list.map(f=>`<figure><img src="${f.foto}" alt="${f.nome}"><figcaption>${f.nome}</figcaption></figure>`).join('')}
+  const specieMap = {};
+  funghi.forEach(f=>{
+    const base = nomeBase(f.nome);
+    (specieMap[base] = specieMap[base] || {categoria: f.categoria, foto: []}).foto.push(f);
+  });
+  const specieOrdinate = Object.keys(specieMap).sort((a,b)=>a.localeCompare(b));
+  $('studioFunghi').innerHTML = specieOrdinate.length ? specieOrdinate.map(nome=>{
+    const s = specieMap[nome];
+    return `<details><summary>${nome} <span class="tag ${s.categoria}">${s.categoria}</span> (${s.foto.length} foto)</summary><div class="grid">
+      ${s.foto.map(f=>`<figure><img src="${f.foto}" alt="${nome}"></figure>`).join('')}
     </div></details>`;
-  }).join('') || '<p class="muted">Nessun fungo inserito.</p>';
+  }).join('') : '<p class="muted">Nessun fungo inserito.</p>';
 }
 
 function updateStats(){
