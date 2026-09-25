@@ -360,6 +360,10 @@ function nomeBase(nome){
   return nome.replace(/\s*\d+$/, '').trim();
 }
 
+function normalizza(s){
+  return s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+}
+
 function startFoto(){
   const cats=['mortale','velenoso','commestibile'];
   const perCat = {};
@@ -375,9 +379,6 @@ function startFoto(){
     alert('Servono almeno 3 funghi diversi (specie diverse, le foto multiple dello stesso fungo non contano) per ciascuna categoria.');
     return;
   }
-  const tutteLeSpecie = new Set();
-  Object.values(perCat).forEach(g=>Object.keys(g).forEach(base=>tutteLeSpecie.add(base)));
-  const elencoSpecie = Array.from(tutteLeSpecie);
 
   let pick=[];
   cats.forEach(c=>{
@@ -389,14 +390,10 @@ function startFoto(){
 
   $('fotoIntro').style.display='none';
   $('fotoArea').innerHTML = `<div class="card"><form id="fotoForm">
-    ${pick.map((p,i)=>{
-      const distrattori = sample(elencoSpecie.filter(b=>b!==p.base), Math.min(3, elencoSpecie.length-1));
-      const opzioni = shuffle([p.base].concat(distrattori));
-      return `<div class="q photo-q"><p class="testo">${i+1}. Che fungo è?</p>
+    ${pick.map((p,i)=>`<div class="q photo-q"><p class="testo">${i+1}. Che fungo è?</p>
         <img src="${p.foto.foto}" alt="fungo da riconoscere">
-        ${opzioni.map(o=>`<label class="opt"><input type="radio" name="p${i}" value="${encodeURIComponent(o)}"> ${o}</label>`).join('')}
-      </div>`;
-    }).join('')}
+        <input type="text" name="p${i}" placeholder="Scrivi il nome del fungo...">
+      </div>`).join('')}
     <button class="btn" type="submit">Correggi</button>
   </form></div>`;
   $('fotoForm').addEventListener('submit', async e=>{
@@ -404,9 +401,9 @@ function startFoto(){
     let corrette=0;
     const sbagliateList=[];
     pick.forEach((p,i)=>{
-      const sel = e.target.querySelector(`input[name=p${i}]:checked`);
-      const selVal = sel ? decodeURIComponent(sel.value) : null;
-      if(selVal===p.base) corrette++;
+      const input = e.target.querySelector(`input[name=p${i}]`);
+      const selVal = input && input.value.trim() ? input.value.trim() : null;
+      if(selVal && normalizza(selVal)===normalizza(p.base)) corrette++;
       else sbagliateList.push({p, selVal});
     });
     const totale=pick.length, sbagliate=totale-corrette, superato=sbagliate<=3;
@@ -417,7 +414,7 @@ function startFoto(){
       ${sbagliateList.length ? `<div class="card"><h2>Foto sbagliate</h2><div class="grid">
         ${sbagliateList.map(({p,selVal})=>`<figure>
           <img src="${p.foto.foto}" alt="${p.base}">
-          <figcaption><b>${p.base}</b><br><span class="muted">${selVal?('la tua risposta: '+selVal):'nessuna risposta data'}</span></figcaption>
+          <figcaption><b>${p.base}</b><br><span class="muted">${selVal?('hai scritto: '+selVal):'nessuna risposta data'}</span></figcaption>
         </figure>`).join('')}
       </div></div>` : ''}`;
   });
