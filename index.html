@@ -75,6 +75,10 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 .timer.warn{color:var(--warn);}
 .timer.danger{color:var(--danger);}
 .disclaimer{background:rgba(184,134,11,.15);border-bottom:1px solid var(--border);color:var(--warn);font-size:.8rem;padding:8px 16px;text-align:center;}
+.grid img{cursor:pointer;}
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;}
+.lightbox.open{display:flex;}
+.lightbox img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;}
 </style>
 </head>
 <body>
@@ -123,7 +127,16 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
     </div>
     <div class="card">
       <h2>Funghi da riconoscere</h2>
-      <p class="hint">Ripassa le foto con il nome già visibile, raggruppate per categoria.</p>
+      <p class="hint">Ripassa le foto con il nome già visibile. Clicca su una foto per vederla più grande.</p>
+      <div class="row">
+        <input type="text" id="studioFSearch" placeholder="Cerca per nome...">
+        <select id="studioFCat">
+          <option value="">Tutte le categorie</option>
+          <option value="mortale">Mortale</option>
+          <option value="velenoso">Velenoso</option>
+          <option value="commestibile">Commestibile</option>
+        </select>
+      </div>
       <div id="studioFunghi"></div>
     </div>
   </section>
@@ -147,6 +160,10 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
   </section>
 
 </main>
+</div>
+
+<div id="lightbox" class="lightbox" onclick="this.classList.remove('open')">
+  <img id="lightboxImg" src="" alt="foto ingrandita">
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
@@ -229,6 +246,8 @@ async function init(){
   }
   $('startTest').addEventListener('click', startTest);
   $('startFoto').addEventListener('click', startFoto);
+  $('studioFSearch').addEventListener('input', renderStudio);
+  $('studioFCat').addEventListener('change', renderStudio);
 }
 
 function subscribe(){
@@ -278,13 +297,26 @@ function renderStudio(){
     const base = nomeBase(f.nome);
     (specieMap[base] = specieMap[base] || {categoria: f.categoria, foto: []}).foto.push(f);
   });
-  const specieOrdinate = Object.keys(specieMap).sort((a,b)=>a.localeCompare(b));
+  const query = ($('studioFSearch').value||'').trim().toLowerCase();
+  const catFiltro = $('studioFCat').value;
+  let specieOrdinate = Object.keys(specieMap).sort((a,b)=>a.localeCompare(b));
+  specieOrdinate = specieOrdinate.filter(nome=>{
+    const s = specieMap[nome];
+    if(catFiltro && s.categoria!==catFiltro) return false;
+    if(query && !nome.toLowerCase().includes(query)) return false;
+    return true;
+  });
   $('studioFunghi').innerHTML = specieOrdinate.length ? specieOrdinate.map(nome=>{
     const s = specieMap[nome];
-    return `<details><summary>${nome} <span class="tag ${s.categoria}">${s.categoria}</span> (${s.foto.length} foto)</summary><div class="grid">
-      ${s.foto.map(f=>`<figure><img src="${f.foto}" alt="${nome}"></figure>`).join('')}
+    return `<details open><summary>${nome} <span class="tag ${s.categoria}">${s.categoria}</span> (${s.foto.length} foto)</summary><div class="grid">
+      ${s.foto.map(f=>`<figure><img src="${f.foto}" alt="${nome}" onclick="apriLightbox('${f.foto.replace(/'/g,"\\'")}')"></figure>`).join('')}
     </div></details>`;
-  }).join('') : '<p class="muted">Nessun fungo inserito.</p>';
+  }).join('') : '<p class="muted">Nessun fungo trovato.</p>';
+}
+
+function apriLightbox(src){
+  $('lightboxImg').src = src;
+  $('lightbox').classList.add('open');
 }
 
 function updateStats(){
