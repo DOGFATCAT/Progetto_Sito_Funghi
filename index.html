@@ -342,22 +342,45 @@ function startTest(){
 }
 
 // ---- RICONOSCIMENTO FOTO ----
+function nomeBase(nome){
+  return nome.replace(/\s*\d+$/, '').trim();
+}
+
 function startFoto(){
   const cats=['mortale','velenoso','commestibile'];
-  const pools = {}; let ok=true;
-  cats.forEach(c=>{ pools[c]=funghi.filter(f=>f.categoria===c); if(pools[c].length<3) ok=false; });
-  if(!ok){ alert('Servono almeno 3 funghi per ciascuna categoria (mortale, velenoso, commestibile).'); return; }
+  const perCat = {};
+  cats.forEach(c=>{
+    const gruppi = {};
+    funghi.filter(f=>f.categoria===c).forEach(f=>{
+      const base = nomeBase(f.nome);
+      (gruppi[base] = gruppi[base]||[]).push(f);
+    });
+    perCat[c] = gruppi;
+  });
+  if(cats.some(c=>Object.keys(perCat[c]).length < 3)){
+    alert('Servono almeno 3 funghi diversi (specie diverse, le foto multiple dello stesso fungo non contano) per ciascuna categoria.');
+    return;
+  }
+  const tutteLeSpecie = new Set();
+  Object.values(perCat).forEach(g=>Object.keys(g).forEach(base=>tutteLeSpecie.add(base)));
+  const elencoSpecie = Array.from(tutteLeSpecie);
+
   let pick=[];
-  cats.forEach(c=>{ pick = pick.concat(sample(pools[c],3)); });
+  cats.forEach(c=>{
+    sample(Object.keys(perCat[c]), 3).forEach(base=>{
+      pick.push({ base, foto: sample(perCat[c][base], 1)[0] });
+    });
+  });
   pick = shuffle(pick);
+
   $('fotoIntro').style.display='none';
   $('fotoArea').innerHTML = `<div class="card"><form id="fotoForm">
-    ${pick.map((f,i)=>{
-      const distractors = sample(funghi.filter(x=>x.id!==f.id), Math.min(3, funghi.length-1));
-      const options = shuffle([f].concat(distractors));
+    ${pick.map((p,i)=>{
+      const distrattori = sample(elencoSpecie.filter(b=>b!==p.base), Math.min(3, elencoSpecie.length-1));
+      const opzioni = shuffle([p.base].concat(distrattori));
       return `<div class="q photo-q"><p class="testo">${i+1}. Che fungo è?</p>
-        <img src="${f.foto}" alt="fungo da riconoscere">
-        ${options.map(o=>`<label class="opt"><input type="radio" name="p${i}" value="${o.id}"> ${o.nome}</label>`).join('')}
+        <img src="${p.foto.foto}" alt="fungo da riconoscere">
+        ${opzioni.map(o=>`<label class="opt"><input type="radio" name="p${i}" value="${encodeURIComponent(o)}"> ${o}</label>`).join('')}
       </div>`;
     }).join('')}
     <button class="btn" type="submit">Correggi</button>
@@ -365,9 +388,9 @@ function startFoto(){
   $('fotoForm').addEventListener('submit', async e=>{
     e.preventDefault();
     let corrette=0;
-    pick.forEach((f,i)=>{
+    pick.forEach((p,i)=>{
       const sel = e.target.querySelector(`input[name=p${i}]:checked`);
-      if(sel && sel.value===f.id) corrette++;
+      if(sel && decodeURIComponent(sel.value)===p.base) corrette++;
     });
     const totale=pick.length, sbagliate=totale-corrette, superato=sbagliate<=3;
     salvaRisultatoLocale({tipo:'foto',corrette,totale,superato,data:Date.now()});
