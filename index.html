@@ -66,6 +66,7 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 .study-q{padding:8px 0;border-top:1px solid var(--border);font-size:.9rem;}
 .study-q ul{margin:6px 0 0;padding-left:18px;}
 .study-q li.ok{color:var(--ok);font-weight:bold;}
+.study-q li.wrong{color:var(--danger);text-decoration:line-through;}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-top:8px;}
 .grid figure{margin:0;text-align:center;}
 .grid img{width:100%;height:90px;object-fit:cover;border-radius:8px;display:block;}
@@ -327,15 +328,28 @@ function startTest(){
     if(finished) return; finished=true; clearInterval(timerId);
     const form=$('testForm');
     let corrette=0;
+    const sbagliateList=[];
     pick.forEach((q,i)=>{
       const sel = form && form.querySelector(`input[name=q${i}]:checked`);
-      if(sel && parseInt(sel.value,10)===q.corretta) corrette++;
+      const selVal = sel ? parseInt(sel.value,10) : null;
+      if(selVal===q.corretta) corrette++;
+      else sbagliateList.push({q, selVal});
     });
     const totale=pick.length, sbagliate=totale-corrette, superato=sbagliate<=3;
     salvaRisultatoLocale({tipo:'scritto',corrette,totale,superato,data:Date.now()});
     $('testArea').innerHTML = `<div class="result ${superato?'pass':'fail'}">
       ${scaduto?'⏱️ Tempo scaduto — ':''}${corrette}/${totale} corrette (${sbagliate} errori) — ${superato?'✓ Test superato':'✗ Test non superato (max 3 errori ammessi)'}</div>
-      <button class="btn secondary" onclick="location.reload()">Rifai il test</button>`;
+      <button class="btn secondary" onclick="location.reload()">Rifai il test</button>
+      ${sbagliateList.length ? `<div class="card"><h2>Domande sbagliate</h2>
+        ${sbagliateList.map(({q,selVal})=>`<div class="study-q">${q.testo} <span class="muted">(${q.categoria})</span><ul>
+          ${q.opzioni.map((o,j)=>{
+            let cls = j===q.corretta ? 'ok' : (j===selVal ? 'wrong' : '');
+            let tag = j===q.corretta ? ' ✓ corretta' : (j===selVal ? ' ✗ la tua risposta' : '');
+            return `<li class="${cls}">${o}${tag}</li>`;
+          }).join('')}
+          ${selVal===null ? '<li class="muted">(nessuna risposta data)</li>' : ''}
+        </ul></div>`).join('')}
+      </div>` : ''}`;
   }
 
   $('testForm').addEventListener('submit', e=>{ e.preventDefault(); finalize(false); });
@@ -388,15 +402,24 @@ function startFoto(){
   $('fotoForm').addEventListener('submit', async e=>{
     e.preventDefault();
     let corrette=0;
+    const sbagliateList=[];
     pick.forEach((p,i)=>{
       const sel = e.target.querySelector(`input[name=p${i}]:checked`);
-      if(sel && decodeURIComponent(sel.value)===p.base) corrette++;
+      const selVal = sel ? decodeURIComponent(sel.value) : null;
+      if(selVal===p.base) corrette++;
+      else sbagliateList.push({p, selVal});
     });
     const totale=pick.length, sbagliate=totale-corrette, superato=sbagliate<=3;
     salvaRisultatoLocale({tipo:'foto',corrette,totale,superato,data:Date.now()});
     $('fotoArea').innerHTML = `<div class="result ${superato?'pass':'fail'}">
       ${corrette}/${totale} corretti (${sbagliate} errori) — ${superato?'✓ Test superato':'✗ Test non superato (max 3 errori ammessi)'}</div>
-      <button class="btn secondary" onclick="location.reload()">Rifai il test</button>`;
+      <button class="btn secondary" onclick="location.reload()">Rifai il test</button>
+      ${sbagliateList.length ? `<div class="card"><h2>Foto sbagliate</h2><div class="grid">
+        ${sbagliateList.map(({p,selVal})=>`<figure>
+          <img src="${p.foto.foto}" alt="${p.base}">
+          <figcaption><b>${p.base}</b><br><span class="muted">${selVal?('la tua risposta: '+selVal):'nessuna risposta data'}</span></figcaption>
+        </figure>`).join('')}
+      </div></div>` : ''}`;
   });
 }
 </script>
