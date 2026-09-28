@@ -76,6 +76,10 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 .timer.danger{color:var(--danger);}
 .disclaimer{background:rgba(184,134,11,.15);border-bottom:1px solid var(--border);color:var(--warn);font-size:.8rem;padding:8px 16px;text-align:center;}
 .grid img{cursor:pointer;}
+.alt-btn{display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:inherit;font-size:.95rem;cursor:pointer;}
+.alt-btn.ok{border-color:var(--ok);background:rgba(46,125,50,.18);color:var(--ok);font-weight:bold;}
+.alt-btn.wrong{border-color:var(--danger);background:rgba(170,68,68,.18);color:var(--danger);}
+.allena-img{max-width:100%;max-height:300px;border-radius:8px;display:block;margin:0 0 10px;object-fit:cover;cursor:pointer;}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;}
 .lightbox.open{display:flex;}
 .lightbox img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;}
@@ -124,6 +128,13 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
       <h2>Domande per argomento</h2>
       <p class="hint">Consulta le domande raggruppate per categoria, con la risposta corretta evidenziata.</p>
       <div id="studioDomande"></div>
+    </div>
+    <div class="card">
+      <h2>Allenamento: come si chiama?</h2>
+      <p class="hint">Ti mostro una foto a caso e scegli il nome giusto tra 3 risposte. Nessun voto, serve solo per esercitarti.</p>
+      <div id="allenaArea"></div>
+      <button class="btn" id="allenaStart">Inizia</button>
+      <span class="count" id="allenaScore"></span>
     </div>
     <div class="card">
       <h2>Funghi da riconoscere</h2>
@@ -247,6 +258,7 @@ async function init(){
   $('startTest').addEventListener('click', startTest);
   $('startFoto').addEventListener('click', startFoto);
   $('studioFSearch').addEventListener('input', renderStudio);
+  $('allenaStart').addEventListener('click', nuovaAllenamento);
   $('studioFCat').addEventListener('change', renderStudio);
 }
 
@@ -316,6 +328,41 @@ function renderStudio(){
 function apriLightbox(src){
   $('lightboxImg').src = src;
   $('lightbox').classList.add('open');
+}
+
+// ---- ALLENAMENTO (foto + 3 risposte, senza voto) ----
+let allenaGiuste = 0, allenaTotali = 0;
+function nuovaAllenamento(){
+  const specie = raggruppaPerSpecie(funghi);
+  if(specie.length < 3){
+    $('allenaArea').innerHTML = '<p class="muted">Servono almeno 3 funghi diversi nel database per allenarsi.</p>';
+    return;
+  }
+  const corretta = sample(specie, 1)[0];
+  const foto = sample(corretta.items, 1)[0];
+  const distrattori = sample(specie.filter(s=>s!==corretta), 2);
+  const opzioni = shuffle([corretta].concat(distrattori)).map(s=>s.rappresentante);
+  $('allenaStart').style.display = 'none';
+  $('allenaArea').innerHTML = `<img class="allena-img" src="${foto.foto}" alt="fungo da riconoscere" onclick="apriLightbox(this.src)">
+    ${opzioni.map(o=>`<button class="alt-btn" data-nome="${encodeURIComponent(o)}">${o}</button>`).join('')}
+    <div id="allenaEsito"></div>`;
+  let risposto = false;
+  $('allenaArea').querySelectorAll('.alt-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if(risposto) return; risposto = true;
+      const scelta = decodeURIComponent(b.dataset.nome);
+      const giusta = scelta === corretta.rappresentante;
+      allenaTotali++; if(giusta) allenaGiuste++;
+      $('allenaArea').querySelectorAll('.alt-btn').forEach(x=>{
+        if(decodeURIComponent(x.dataset.nome) === corretta.rappresentante) x.classList.add('ok');
+        else if(x===b) x.classList.add('wrong');
+      });
+      $('allenaEsito').innerHTML = `<p>${giusta ? '✓ Giusto!' : '✗ Sbagliato: era <b>'+corretta.rappresentante+'</b>'}</p>
+        <button class="btn" id="allenaNext">Prossima foto</button>`;
+      $('allenaScore').textContent = ` Corrette: ${allenaGiuste}/${allenaTotali}`;
+      $('allenaNext').addEventListener('click', nuovaAllenamento);
+    });
+  });
 }
 
 function updateStats(){
