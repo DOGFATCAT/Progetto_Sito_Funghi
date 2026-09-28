@@ -293,9 +293,8 @@ function renderStudio(){
   </details>`).join('') : '<p class="muted">Nessuna domanda inserita.</p>';
 
   const specieMap = {};
-  funghi.forEach(f=>{
-    const base = nomeBase(f.nome);
-    (specieMap[base] = specieMap[base] || {categoria: f.categoria, foto: []}).foto.push(f);
+  raggruppaPerSpecie(funghi).forEach(g=>{
+    specieMap[g.rappresentante] = {categoria: g.items[0].categoria, foto: g.items};
   });
   const query = ($('studioFSearch').value||'').trim().toLowerCase();
   const catFiltro = $('studioFCat').value;
@@ -419,14 +418,30 @@ function corrisponde(risposta, corretto){
   return levenshtein(a, b) <= soglia;
 }
 
+// Raggruppa una lista di funghi per specie, unendo nomi quasi identici
+// (es. "Trcholoma Equestre" e "Tricholoma Equestre") invece di trattarli
+// come specie diverse solo per un refuso nel nome del file caricato.
+function raggruppaPerSpecie(lista){
+  const gruppi = []; // {conteggio:{nomeVariante:n}, rappresentante, items:[]}
+  lista.forEach(f=>{
+    const base = nomeBase(f.nome);
+    const baseNorm = normalizza(base);
+    let g = gruppi.find(g => levenshtein(normalizza(g.rappresentante), baseNorm) <= 2);
+    if(!g){ g = {conteggio:{}, rappresentante: base, items:[]}; gruppi.push(g); }
+    g.conteggio[base] = (g.conteggio[base]||0) + 1;
+    g.rappresentante = Object.entries(g.conteggio).sort((a,b)=>b[1]-a[1])[0][0];
+    g.items.push(f);
+  });
+  return gruppi; // [{rappresentante, items:[...funghi]}]
+}
+
 function startFoto(){
   const cats=['mortale','velenoso','commestibile'];
   const perCat = {};
   cats.forEach(c=>{
     const gruppi = {};
-    funghi.filter(f=>f.categoria===c).forEach(f=>{
-      const base = nomeBase(f.nome);
-      (gruppi[base] = gruppi[base]||[]).push(f);
+    raggruppaPerSpecie(funghi.filter(f=>f.categoria===c)).forEach(g=>{
+      gruppi[g.rappresentante] = g.items;
     });
     perCat[c] = gruppi;
   });
