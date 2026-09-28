@@ -80,6 +80,11 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 .alt-btn.ok{border-color:var(--ok);background:rgba(46,125,50,.18);color:var(--ok);font-weight:bold;}
 .alt-btn.wrong{border-color:var(--danger);background:rgba(170,68,68,.18);color:var(--danger);}
 .allena-img{max-width:100%;max-height:300px;border-radius:8px;display:block;margin:0 0 10px;object-fit:cover;cursor:pointer;}
+.stat-table{width:100%;border-collapse:collapse;font-size:.88rem;}
+.stat-table th,.stat-table td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;}
+.stat-table th:first-child,.stat-table td:first-child{text-align:left;}
+.stat-table td.g{color:var(--ok);font-weight:bold;}
+.stat-table td.s{color:var(--danger);font-weight:bold;}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;}
 .lightbox.open{display:flex;}
 .lightbox img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;}
@@ -135,6 +140,11 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
       <div id="allenaArea"></div>
       <button class="btn" id="allenaStart">Inizia</button>
       <span class="count" id="allenaScore"></span>
+    </div>
+    <div class="card">
+      <h2>Le mie statistiche per fungo</h2>
+      <p class="hint">Quante volte hai indovinato o sbagliato ogni fungo (allenamento e riconoscimento fotografico). In cima i più sbagliati.</p>
+      <div id="statsSpecie"><p class="muted">Caricamento...</p></div>
     </div>
     <div class="card">
       <h2>Funghi da riconoscere</h2>
@@ -263,6 +273,13 @@ async function init(){
 }
 
 function subscribe(){
+  const u = fireAuth.currentUser;
+  if(u){
+    fireDb.collection('statistiche').doc(u.uid).onSnapshot(
+      snap=>renderStats(snap.exists ? snap.data() : null),
+      err=>{ $('statsSpecie').innerHTML = '<p class="muted">Statistiche non disponibili: mancano le regole di sicurezza per la raccolta "statistiche" su Firestore.</p>'; }
+    );
+  }
   db.collection('domande').onSnapshot(snap=>{
     domande = snap.docs.map(d=>({id:d.id,...d.data}));
     updateStats(); renderStudio();
@@ -325,6 +342,35 @@ function renderStudio(){
   }).join('') : '<p class="muted">Nessun fungo trovato.</p>';
 }
 
+// ---- STATISTICHE PER FUNGO (salvate su Firestore, una per utente) ----
+async function registraEsiti(lista){
+  const user = fireAuth.currentUser;
+  if(!user || !lista.length) return;
+  const specie = {};
+  lista.forEach(({nome, giusta})=>{
+    const key = normalizza(nome).replace(/[^a-z0-9]+/g,'_');
+    specie[key] = { nome, [giusta ? 'giuste' : 'sbagliate']: firebase.firestore.FieldValue.increment(1) };
+  });
+  try{
+    await fireDb.collection('statistiche').doc(user.uid).set({ specie }, {merge:true});
+  }catch(e){
+    console.log('[stats] salvataggio non riuscito:', e);
+  }
+}
+
+function renderStats(dati){
+  const specie = (dati && dati.specie) ? Object.values(dati.specie) : [];
+  if(!specie.length){ $('statsSpecie').innerHTML = '<p class="muted">Nessun dato ancora: fai qualche allenamento o un riconoscimento fotografico.</p>'; return; }
+  specie.sort((a,b)=> (b.sbagliate||0)-(a.sbagliate||0) || a.nome.localeCompare(b.nome));
+  $('statsSpecie').innerHTML = `<table class="stat-table">
+    <tr><th>Fungo</th><th>✓</th><th>✗</th><th>%</th></tr>
+    ${specie.map(s=>{
+      const g = s.giuste||0, e = s.sbagliate||0, t = g+e;
+      return `<tr><td>${s.nome}</td><td class="g">${g}</td><td class="s">${e}</td><td>${t ? Math.round(g*100/t)+'%' : '-'}</td></tr>`;
+    }).join('')}
+  </table>`;
+}
+
 function apriLightbox(src){
   $('lightboxImg').src = src;
   $('lightbox').classList.add('open');
@@ -353,6 +399,7 @@ function nuovaAllenamento(){
       const scelta = decodeURIComponent(b.dataset.nome);
       const giusta = scelta === corretta.rappresentante;
       allenaTotali++; if(giusta) allenaGiuste++;
+      registraEsiti([{nome: corretta.rappresentante, giusta}]);
       $('allenaArea').querySelectorAll('.alt-btn').forEach(x=>{
         if(decodeURIComponent(x.dataset.nome) === corretta.rappresentante) x.classList.add('ok');
         else if(x===b) x.classList.add('wrong');
@@ -517,12 +564,16 @@ function startFoto(){
     e.preventDefault();
     let corrette=0;
     const sbagliateList=[];
+    const esiti=[];
     pick.forEach((p,i)=>{
       const input = e.target.querySelector(`input[name=p${i}]`);
       const selVal = input && input.value.trim() ? input.value.trim() : null;
-      if(selVal && corrisponde(selVal, p.base)) corrette++;
+      const okRisposta = !!(selVal && corrisponde(selVal, p.base));
+      esiti.push({nome: p.base, giusta: okRisposta});
+      if(okRisposta) corrette++;
       else sbagliateList.push({p, selVal});
     });
+    registraEsiti(esiti);
     const totale=pick.length, sbagliate=totale-corrette, superato=sbagliate<=3;
     salvaRisultatoLocale({tipo:'foto',corrette,totale,superato,data:Date.now()});
     $('fotoArea').innerHTML = `<div class="result ${superato?'pass':'fail'}">
