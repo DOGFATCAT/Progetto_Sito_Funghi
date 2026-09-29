@@ -298,17 +298,30 @@ async function addFunghiBulk(){
   if(!files.length){ alert('Seleziona almeno una foto.'); return; }
   const categoria = $('fCat').value;
   $('addF').disabled = true;
-  let ok=0, err=0;
-  for(let i=0;i<files.length;i++){
-    $('fCount').textContent = `Caricamento ${i+1}/${files.length}...`;
+
+  let elaborate = 0;
+  $('fCount').textContent = `Elaborazione immagini (0/${files.length})...`;
+  const risultati = await Promise.all(files.map(async (file)=>{
     try{
-      const dataUrl = await ridimensionaEComprimi(files[i]);
-      if(dataUrl.length > 900000){ err++; continue; } // troppo grande per un documento Firestore (limite 1MB)
-      await db.collection('funghi').add({ nome: nomeDaFile(files[i].name), categoria, foto: dataUrl, note:'' });
-      ok++;
-    }catch(e){ err++; }
+      const dataUrl = await ridimensionaEComprimi(file);
+      elaborate++;
+      $('fCount').textContent = `Elaborazione immagini (${elaborate}/${files.length})...`;
+      if(dataUrl.length > 900000) return {ok:false};
+      return {ok:true, nome: nomeDaFile(file.name), categoria, foto: dataUrl, note:''};
+    }catch(e){ elaborate++; return {ok:false}; }
+  }));
+  const validi = risultati.filter(r=>r.ok);
+  const nonValidi = risultati.length - validi.length;
+
+  $('fCount').textContent = `Salvataggio di ${validi.length} foto...`;
+  for(let i=0;i<validi.length;i+=400){
+    const batch = fireDb.batch();
+    validi.slice(i,i+400).forEach(v=>{
+      batch.set(fireDb.collection('funghi').doc(), {nome:v.nome, categoria:v.categoria, foto:v.foto, note:v.note});
+    });
+    await batch.commit();
   }
-  $('fCount').textContent = `Fatto: ${ok} foto caricate${err?`, ${err} errori/troppo grandi`:''}.`;
+  $('fCount').textContent = `Fatto: ${validi.length} foto caricate${nonValidi?`, ${nonValidi} errori/troppo grandi`:''}.`;
   $('fFiles').value='';
   $('addF').disabled = false;
 }
@@ -376,10 +389,14 @@ async function importCsv(){
   if(!rows.length){ $('csvStatus').textContent='Nessuna riga valida trovata nel CSV.'; return; }
   $('importCsv').disabled = true;
   let ok=0;
-  for(const r of rows){
-    $('csvStatus').textContent = `Importazione ${ok+1}/${rows.length}...`;
-    await db.collection('domande').add(r);
-    ok++;
+  for(let i=0;i<rows.length;i+=400){
+    const batch = fireDb.batch();
+    rows.slice(i,i+400).forEach(r=>{
+      batch.set(fireDb.collection('domande').doc(), r);
+    });
+    await batch.commit();
+    ok += Math.min(400, rows.length-i);
+    $('csvStatus').textContent = `Salvate ${ok}/${rows.length} domande...`;
   }
   $('csvStatus').textContent = `Importate ${ok} domande.`;
   $('csvFile').value='';
