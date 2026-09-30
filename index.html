@@ -86,8 +86,11 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 .stat-table td.g{color:var(--ok);font-weight:bold;}
 .stat-table td.s{color:var(--danger);font-weight:bold;}
 .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:50;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;}
-.lightbox.open{display:flex;}
-.lightbox img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;}
+.lightbox.open{display:flex;flex-direction:column;gap:12px;}
+.lightbox img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain;min-height:0;}
+.lightbox-cap{color:#fff;text-align:center;font-size:1rem;}
+.tag.grande{font-size:.9rem;padding:4px 12px;}
+.foto-cat{margin:0 0 8px;}
 </style>
 </head>
 <body>
@@ -185,6 +188,7 @@ summary{cursor:pointer;font-weight:bold;color:var(--accent-dark);}
 
 <div id="lightbox" class="lightbox" onclick="this.classList.remove('open')">
   <img id="lightboxImg" src="" alt="foto ingrandita">
+  <div id="lightboxCap" class="lightbox-cap"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
@@ -275,7 +279,10 @@ async function init(){
   $('studioFunghi').addEventListener('click', e=>{
     if(e.target.tagName==='IMG'){
       const f = funghi.find(x=>x.id===e.target.dataset.id);
-      if(f) apriLightbox(f.foto);
+      if(f){
+        const nome = Object.keys(specieCorrente).find(n=>specieCorrente[n].foto.some(x=>x.id===f.id)) || nomeBase(f.nome);
+        apriLightbox(f.foto, f.categoria, nome);
+      }
     }
   });
 }
@@ -378,7 +385,7 @@ function renderStudio(){
   $('studioFunghi').innerHTML = specieOrdinate.length ? specieOrdinate.map(nome=>{
     const s = specieCorrente[nome];
     const k = encodeURIComponent(nome);
-    return `<details data-tipo="specie" data-chiave="${k}" ${(pochi||apertiFun.has(k))?'open':''}><summary>${nome} <span class="tag ${s.categoria}">${s.categoria}</span> (${s.foto.length} foto)</summary><div class="grid lazy"></div></details>`;
+    return `<details data-tipo="specie" data-chiave="${k}" ${(pochi||apertiFun.has(k))?'open':''}><summary>${nome} <span class="tag grande ${s.categoria}">${s.categoria}</span> (${s.foto.length} foto)</summary><div class="grid lazy"></div></details>`;
   }).join('') : '<p class="muted">Nessun fungo trovato.</p>';
   $('studioFunghi').querySelectorAll('details[open]').forEach(riempiDettagli);
 }
@@ -412,8 +419,14 @@ function renderStats(dati){
   </table>`;
 }
 
-function apriLightbox(src){
+function badgeCategoria(cat, grande){
+  return `<span class="tag ${grande?'grande ':''}${cat}">${cat}</span>`;
+}
+
+// nome è facoltativo: nell'allenamento non va mostrato prima della risposta
+function apriLightbox(src, categoria, nome){
   $('lightboxImg').src = src;
+  $('lightboxCap').innerHTML = (nome ? `<b>${nome}</b> ` : '') + (categoria ? badgeCategoria(categoria, true) : '');
   $('lightbox').classList.add('open');
 }
 
@@ -427,10 +440,17 @@ function nuovaAllenamento(){
   }
   const corretta = sample(specie, 1)[0];
   const foto = sample(corretta.items, 1)[0];
-  const distrattori = sample(specie.filter(s=>s!==corretta), 2);
+  const cat = foto.categoria;
+  // Visto che la categoria è mostrata, le alternative sono della stessa categoria (se ce ne sono abbastanza)
+  const altre = specie.filter(s=>s!==corretta);
+  const stessaCat = altre.filter(s=>s.items[0].categoria===cat);
+  const distrattori = stessaCat.length >= 2
+    ? sample(stessaCat, 2)
+    : stessaCat.concat(sample(altre.filter(s=>!stessaCat.includes(s)), 2-stessaCat.length));
   const opzioni = shuffle([corretta].concat(distrattori)).map(s=>s.rappresentante);
   $('allenaStart').style.display = 'none';
-  $('allenaArea').innerHTML = `<img class="allena-img" src="${foto.foto}" alt="fungo da riconoscere" onclick="apriLightbox(this.src)">
+  $('allenaArea').innerHTML = `<div class="foto-cat">${badgeCategoria(cat, true)}</div>
+    <img class="allena-img" src="${foto.foto}" alt="fungo da riconoscere" onclick="apriLightbox(this.src,'${cat}')">
     ${opzioni.map(o=>`<button class="alt-btn" data-nome="${encodeURIComponent(o)}">${o}</button>`).join('')}
     <div id="allenaEsito"></div>`;
   let risposto = false;
@@ -595,7 +615,7 @@ function startFoto(){
 
   $('fotoIntro').style.display='none';
   $('fotoArea').innerHTML = `<div class="card"><form id="fotoForm">
-    ${pick.map((p,i)=>`<div class="q photo-q"><p class="testo">${i+1}. Che fungo è?</p>
+    ${pick.map((p,i)=>`<div class="q photo-q"><p class="testo">${i+1}. Che fungo è? ${badgeCategoria(p.foto.categoria, true)}</p>
         <img src="${p.foto.foto}" alt="fungo da riconoscere">
         <input type="text" name="p${i}" placeholder="Scrivi il nome del fungo...">
       </div>`).join('')}
@@ -623,7 +643,7 @@ function startFoto(){
       ${sbagliateList.length ? `<div class="card"><h2>Foto sbagliate</h2><div class="grid">
         ${sbagliateList.map(({p,selVal})=>`<figure>
           <img src="${p.foto.foto}" alt="${p.base}">
-          <figcaption><b>${p.base}</b><br><span class="muted">${selVal?('hai scritto: '+selVal):'nessuna risposta data'}</span></figcaption>
+          <figcaption><b>${p.base}</b> ${badgeCategoria(p.foto.categoria)}<br><span class="muted">${selVal?('hai scritto: '+selVal):'nessuna risposta data'}</span></figcaption>
         </figure>`).join('')}
       </div></div>` : ''}`;
   });
