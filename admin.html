@@ -141,6 +141,8 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const fireDb = firebase.firestore();
+// Cache locale nel browser: dalla seconda apertura i dati compaiono subito
+fireDb.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 const fireAuth = firebase.auth();
 
 const db = {
@@ -177,7 +179,7 @@ fireAuth.onAuthStateChanged(async user=>{
   }
   $('adminGate').style.display = user ? 'none' : 'block';
   $('adminContent').style.display = user ? 'block' : 'none';
-  if(user){ loadAll(); subscribe(); }
+  if(user){ subscribe(); } else { scollega(); }
 });
 
 $('loginBtn').addEventListener('click', async ()=>{
@@ -222,23 +224,27 @@ $('addQ').addEventListener('click', addDomanda);
 $('addF').addEventListener('click', addFunghiBulk);
 $('importCsv').addEventListener('click', importCsv);
 
-function subscribe(){
-  db.collection('domande').onSnapshot(snap=>{
-    domande = snap.docs.map(d=>({id:d.id,...d.data}));
-    renderQList(); updateStats();
-  }, ()=>{});
-  db.collection('funghi').onSnapshot(snap=>{
-    funghi = snap.docs.map(d=>({id:d.id,...d.data}));
-    renderFList(); updateStats();
-  }, ()=>{});
+let _unsubs = [];
+function scollega(){ _unsubs.forEach(u=>u()); _unsubs = []; }
+
+// Più snapshot ravvicinati producono un solo ridisegno
+let _renderPianificato = false;
+function pianificaRender(){
+  if(_renderPianificato) return;
+  _renderPianificato = true;
+  setTimeout(()=>{ _renderPianificato = false; renderQList(); renderFList(); updateStats(); }, 60);
 }
 
-async function loadAll(){
-  const qs = await db.collection('domande').get();
-  domande = qs.docs.map(d=>({id:d.id,...d.data}));
-  const fs = await db.collection('funghi').get();
-  funghi = fs.docs.map(d=>({id:d.id,...d.data}));
-  renderQList(); renderFList(); updateStats();
+function subscribe(){
+  if(_unsubs.length) return; // già attivo: evito listener doppi
+  _unsubs.push(db.collection('domande').onSnapshot(snap=>{
+    domande = snap.docs.map(d=>({id:d.id,...d.data}));
+    pianificaRender();
+  }, ()=>{}));
+  _unsubs.push(db.collection('funghi').onSnapshot(snap=>{
+    funghi = snap.docs.map(d=>({id:d.id,...d.data}));
+    pianificaRender();
+  }, ()=>{}));
 }
 
 function updateStats(){
@@ -257,11 +263,14 @@ async function addDomanda(){
   $('qTesto').value=''; $('qA').value=''; $('qB').value=''; $('qC').value='';
 }
 
+let qLimite = 100, fLimite = 40;
 function renderQList(){
   if(!domande.length){ $('qList').innerHTML='<p class="muted">Nessuna domanda inserita.</p>'; return; }
-  $('qList').innerHTML = domande.map(q=>`<div class="list-item">
+  const visibili = domande.slice(0, qLimite);
+  $('qList').innerHTML = visibili.map(q=>`<div class="list-item">
     <span>${q.testo} <span class="muted">(${q.categoria})</span></span>
-    <button class="btn danger" onclick="delDomanda('${q.id}')">elimina</button></div>`).join('');
+    <button class="btn danger" onclick="delDomanda('${q.id}')">elimina</button></div>`).join('')
+    + (domande.length > qLimite ? `<button class="btn secondary" onclick="qLimite+=100;renderQList()">Mostra altre (${domande.length-qLimite} rimaste)</button>` : '');
 }
 window.delDomanda = async id => { await db.doc('domande/'+id).delete(); };
 
@@ -333,13 +342,16 @@ function renderFList(){
     f.nome.toLowerCase().includes(q) || f.categoria.toLowerCase().includes(q)
   ) : funghi;
   if(!filtrati.length){ $('fList').innerHTML='<p class="muted">Nessun fungo trovato per questa ricerca.</p>'; return; }
-  $('fList').innerHTML = filtrati.map(f=>`<div class="list-item">
-    <img src="${f.foto}" alt="${f.nome}">
+  const visibili = filtrati.slice(0, fLimite);
+  $('fList').innerHTML = visibili.map(f=>`<div class="list-item">
+    <img loading="lazy" decoding="async" src="${f.foto}" alt="${f.nome}">
     <span style="flex:1">${f.nome} <span class="tag ${f.categoria}">${f.categoria}</span></span>
-    <button class="btn danger" onclick="delFungo('${f.id}')">elimina</button></div>`).join('');
+    <button class="btn danger" onclick="delFungo('${f.id}')">elimina</button></div>`).join('')
+    + (filtrati.length > fLimite ? `<button class="btn secondary" onclick="fLimite+=40;renderFList()">Mostra altri (${filtrati.length-fLimite} rimasti)</button>` : '');
 }
 window.delFungo = async id => { await db.doc('funghi/'+id).delete(); };
-$('fSearch').addEventListener('input', renderFList);
+let _cercaT;
+$('fSearch').addEventListener('input', ()=>{ clearTimeout(_cercaT); _cercaT = setTimeout(()=>{ fLimite = 40; renderFList(); }, 200); });
 
 // ---- CSV domande ----
 function parseCSVLine(line){

@@ -202,6 +202,9 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const fireDb = firebase.firestore();
+// Cache locale nel browser: dalla seconda visita domande e foto compaiono subito
+// e dal server vengono scaricate solo le modifiche. Se il browser non la supporta si va avanti senza.
+fireDb.enablePersistence({synchronizeTabs:true}).catch(()=>{});
 const fireAuth = firebase.auth();
 
 // Adapter di sola lettura: il sito pubblico legge domande/funghi da Firestore
@@ -259,18 +262,33 @@ $('siteLoginBtn').addEventListener('click', async ()=>{
 $('siteLogoutBtn').addEventListener('click', ()=> fireAuth.signOut());
 
 async function init(){
-  try{
-    await loadAll();
-    subscribe();
-  }catch(e){
-    $('homeStats').textContent = 'Impossibile leggere i dati. Riprova più tardi.';
-  }
+  renderStorico(getRisultatiLocali().slice(0,10));
+  subscribe();
   $('startTest').addEventListener('click', startTest);
   $('startFoto').addEventListener('click', startFoto);
-  $('studioFSearch').addEventListener('input', renderStudio);
+  $('studioFSearch').addEventListener('input', ricercaStudio);
   $('allenaStart').addEventListener('click', nuovaAllenamento);
   $('studioFCat').addEventListener('change', renderStudio);
+  // contenuti dei menu a tendina costruiti solo quando si aprono ("toggle" non fa bubbling: uso la fase di cattura)
+  $('studioFunghi').addEventListener('toggle', e=>{ if(e.target.open) riempiDettagli(e.target); }, true);
+  $('studioDomande').addEventListener('toggle', e=>{ if(e.target.open) riempiDettagli(e.target); }, true);
+  $('studioFunghi').addEventListener('click', e=>{
+    if(e.target.tagName==='IMG'){
+      const f = funghi.find(x=>x.id===e.target.dataset.id);
+      if(f) apriLightbox(f.foto);
+    }
+  });
 }
+
+// Più snapshot ravvicinati (domande, funghi, cache, server) producono un solo ridisegno
+let _renderPianificato = false;
+function pianificaRender(){
+  if(_renderPianificato) return;
+  _renderPianificato = true;
+  setTimeout(()=>{ _renderPianificato = false; updateStats(); renderStudio(); }, 60);
+}
+let _ricercaT;
+function ricercaStudio(){ clearTimeout(_ricercaT); _ricercaT = setTimeout(renderStudio, 200); }
 
 function subscribe(){
   const u = fireAuth.currentUser;
@@ -280,14 +298,15 @@ function subscribe(){
       err=>{ $('statsSpecie').innerHTML = '<p class="muted">Statistiche non disponibili: mancano le regole di sicurezza per la raccolta "statistiche" su Firestore.</p>'; }
     );
   }
+  const errore = ()=>{ $('homeStats').textContent = 'Impossibile leggere i dati. Riprova più tardi.'; };
   db.collection('domande').onSnapshot(snap=>{
     domande = snap.docs.map(d=>({id:d.id,...d.data}));
-    updateStats(); renderStudio();
-  }, ()=>{});
+    pianificaRender();
+  }, errore);
   db.collection('funghi').onSnapshot(snap=>{
     funghi = snap.docs.map(d=>({id:d.id,...d.data}));
-    updateStats(); renderStudio();
-  }, ()=>{});
+    pianificaRender();
+  }, errore);
 }
 
 function getRisultatiLocali(){
@@ -302,44 +321,66 @@ function salvaRisultatoLocale(r){
   renderStorico(getRisultatiLocali().slice(0,10));
 }
 
-async function loadAll(){
-  const qs = await db.collection('domande').get();
-  domande = qs.docs.map(d=>({id:d.id,...d.data}));
-  const fs = await db.collection('funghi').get();
-  funghi = fs.docs.map(d=>({id:d.id,...d.data}));
-  updateStats(); renderStudio();
-  renderStorico(getRisultatiLocali().slice(0,10));
+let specieCorrente = {};   // nome specie -> {categoria, foto:[...]}
+let domandeCorrenti = {};  // categoria -> [domande]
+let _cacheGruppi = {src:null, val:null};
+
+function chiaviAperte(idContenitore){
+  return new Set(Array.from($(idContenitore).querySelectorAll('details[open]')).map(d=>d.dataset.chiave));
+}
+
+// Costruisce il contenuto di un menu a tendina solo la prima volta che viene aperto
+function riempiDettagli(det){
+  if(det.dataset.pieno) return;
+  det.dataset.pieno = '1';
+  const box = det.querySelector('.lazy');
+  const chiave = decodeURIComponent(det.dataset.chiave);
+  if(det.dataset.tipo === 'specie'){
+    const s = specieCorrente[chiave];
+    if(!s) return;
+    box.innerHTML = s.foto.map(f=>`<figure><img loading="lazy" decoding="async" data-id="${f.id}" src="${f.foto}" alt=""></figure>`).join('');
+  } else {
+    const lista = domandeCorrenti[chiave] || [];
+    box.innerHTML = lista.map(q=>`<div class="study-q">${q.testo}<ul>
+      ${q.opzioni.map((o,j)=>`<li class="${j===q.corretta?'ok':''}">${o}${j===q.corretta?' ✓':''}</li>`).join('')}
+    </ul></div>`).join('');
+  }
 }
 
 function renderStudio(){
-  const byCat={};
-  domande.forEach(q=>{ (byCat[q.categoria]=byCat[q.categoria]||[]).push(q); });
-  const cats=Object.keys(byCat).sort();
-  $('studioDomande').innerHTML = cats.length ? cats.map(c=>`<details><summary>${c} (${byCat[c].length})</summary>
-    ${byCat[c].map(q=>`<div class="study-q">${q.testo}<ul>
-      ${q.opzioni.map((o,j)=>`<li class="${j===q.corretta?'ok':''}">${o}${j===q.corretta?' ✓':''}</li>`).join('')}
-    </ul></div>`).join('')}
-  </details>`).join('') : '<p class="muted">Nessuna domanda inserita.</p>';
+  // --- domande per argomento ---
+  const apertiDom = chiaviAperte('studioDomande');
+  domandeCorrenti = {};
+  domande.forEach(q=>{ (domandeCorrenti[q.categoria]=domandeCorrenti[q.categoria]||[]).push(q); });
+  const cats = Object.keys(domandeCorrenti).sort();
+  $('studioDomande').innerHTML = cats.length ? cats.map(c=>{
+    const k = encodeURIComponent(c);
+    return `<details data-tipo="domande" data-chiave="${k}" ${apertiDom.has(k)?'open':''}><summary>${c} (${domandeCorrenti[c].length})</summary><div class="lazy"></div></details>`;
+  }).join('') : '<p class="muted">Nessuna domanda inserita.</p>';
+  $('studioDomande').querySelectorAll('details[open]').forEach(riempiDettagli);
 
-  const specieMap = {};
-  raggruppaPerSpecie(funghi).forEach(g=>{
-    specieMap[g.rappresentante] = {categoria: g.items[0].categoria, foto: g.items};
+  // --- funghi per specie ---
+  const apertiFun = chiaviAperte('studioFunghi');
+  if(_cacheGruppi.src !== funghi){ _cacheGruppi = {src: funghi, val: raggruppaPerSpecie(funghi)}; }
+  specieCorrente = {};
+  _cacheGruppi.val.forEach(g=>{
+    specieCorrente[g.rappresentante] = {categoria: g.items[0].categoria, foto: g.items};
   });
   const query = ($('studioFSearch').value||'').trim().toLowerCase();
   const catFiltro = $('studioFCat').value;
-  let specieOrdinate = Object.keys(specieMap).sort((a,b)=>a.localeCompare(b));
-  specieOrdinate = specieOrdinate.filter(nome=>{
-    const s = specieMap[nome];
+  const specieOrdinate = Object.keys(specieCorrente).sort((a,b)=>a.localeCompare(b)).filter(nome=>{
+    const s = specieCorrente[nome];
     if(catFiltro && s.categoria!==catFiltro) return false;
     if(query && !nome.toLowerCase().includes(query)) return false;
     return true;
   });
+  const pochi = specieOrdinate.length <= 3; // se la ricerca restringe a pochi funghi li apro subito
   $('studioFunghi').innerHTML = specieOrdinate.length ? specieOrdinate.map(nome=>{
-    const s = specieMap[nome];
-    return `<details open><summary>${nome} <span class="tag ${s.categoria}">${s.categoria}</span> (${s.foto.length} foto)</summary><div class="grid">
-      ${s.foto.map(f=>`<figure><img src="${f.foto}" alt="${nome}" onclick="apriLightbox('${f.foto.replace(/'/g,"\\'")}')"></figure>`).join('')}
-    </div></details>`;
+    const s = specieCorrente[nome];
+    const k = encodeURIComponent(nome);
+    return `<details data-tipo="specie" data-chiave="${k}" ${(pochi||apertiFun.has(k))?'open':''}><summary>${nome} <span class="tag ${s.categoria}">${s.categoria}</span> (${s.foto.length} foto)</summary><div class="grid lazy"></div></details>`;
   }).join('') : '<p class="muted">Nessun fungo trovato.</p>';
+  $('studioFunghi').querySelectorAll('details[open]').forEach(riempiDettagli);
 }
 
 // ---- STATISTICHE PER FUNGO (salvate su Firestore, una per utente) ----
